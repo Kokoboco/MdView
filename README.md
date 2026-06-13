@@ -2,7 +2,7 @@
 
 A dead-simple markdown viewer for macOS.
 
-- **Main panel** renders your markdown natively (headings, lists, tables, code, block quotes, task lists).
+- **Main panel** renders your markdown natively (headings, lists, tables, code, block quotes, task lists), with **tabs** for keeping multiple documents open at once.
 - **Left nav** shows your documents folder as a navigable tree, with a **filter field** at the top to find files fast.
 - **Copy for agents** — one-click copy of the document in the format LLMs like best.
 
@@ -57,8 +57,8 @@ swift run MdView
 
 1. Press **⌘O** (File ▸ Open Folder…) and pick a folder of markdown documents.
 2. Browse the tree on the left; type in the filter box to narrow it down.
-3. Click a document to view it.
-4. Click **Copy** (or **⇧⌘C**) to copy the raw markdown for pasting into an agent.
+3. Click a document to open it in a tab; click others to open more tabs. Switch with a click or **⇧⌘]** / **⇧⌘[**, and close the active tab with **⌘W**.
+4. Click **Copy** (or **⇧⌘C**) to copy the active document's raw markdown for pasting into an agent.
 
 Use the **▲ (chevron-up)** button in the sidebar header — or **⌘↑** — to re-root the tree at the current folder's parent, and the folder button beside it to pick a different folder.
 

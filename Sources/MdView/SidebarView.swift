@@ -72,10 +72,10 @@ struct SidebarView: View {
         .padding(.vertical, 8)
     }
 
-    /// Selecting a node loads its document through `AppState`.
+    /// Selecting a node opens it in a tab via `AppState`.
     private var selectionBinding: Binding<URL?> {
         Binding(
-            get: { state.selectedURL },
+            get: { state.activeURL },
             set: { if let url = $0 { state.select(url) } }
         )
     }
