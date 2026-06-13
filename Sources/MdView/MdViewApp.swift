@@ -16,6 +16,12 @@ struct MdViewApp: App {
                 }
                 .keyboardShortcut("o", modifiers: [.command])
 
+                Button("Go to Parent Folder") {
+                    state.goUp()
+                }
+                .keyboardShortcut(.upArrow, modifiers: [.command])
+                .disabled(!state.canGoUp)
+
                 Button("Reload Folder") {
                     state.reload()
                 }

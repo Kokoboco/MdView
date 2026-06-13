@@ -59,6 +59,19 @@ final class AppState: ObservableObject {
         open(folder: root)
     }
 
+    /// Whether the current root has a parent directory we can move up into.
+    var canGoUp: Bool {
+        guard let root = rootURL else { return false }
+        let parent = root.deletingLastPathComponent()
+        return parent.path != root.path
+    }
+
+    /// Re-root the tree at the parent of the current folder.
+    func goUp() {
+        guard let root = rootURL, canGoUp else { return }
+        open(folder: root.deletingLastPathComponent())
+    }
+
     private func restoreLastFolder() {
         guard let path = UserDefaults.standard.string(forKey: lastFolderKey) else { return }
         let url = URL(fileURLWithPath: path, isDirectory: true)
