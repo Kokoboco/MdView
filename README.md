@@ -60,6 +60,8 @@ swift run MdView
 3. Click a document to view it.
 4. Click **Copy** (or **⇧⌘C**) to copy the raw markdown for pasting into an agent.
 
+Use the **▲ (chevron-up)** button in the sidebar header — or **⌘↑** — to re-root the tree at the current folder's parent, and the folder button beside it to pick a different folder.
+
 The last folder you opened is remembered and reopened on launch. **⌘R** reloads the folder from disk.
 
 ## Tests

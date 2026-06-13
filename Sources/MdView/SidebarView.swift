@@ -7,6 +7,11 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if state.rootURL != nil {
+                folderHeader
+                Divider()
+            }
+
             FilterField(text: $state.filter)
                 .padding(8)
 
@@ -31,6 +36,40 @@ struct SidebarView: View {
             }
         }
         .frame(minWidth: 200)
+    }
+
+    /// Shows the current root folder with controls to move up to its parent
+    /// or pick a different folder.
+    private var folderHeader: some View {
+        HStack(spacing: 6) {
+            Button {
+                state.goUp()
+            } label: {
+                Image(systemName: "chevron.up")
+            }
+            .buttonStyle(.borderless)
+            .disabled(!state.canGoUp)
+            .help("Go to parent folder")
+
+            Image(systemName: "folder.fill")
+                .foregroundStyle(.secondary)
+            Text(state.rootURL?.lastPathComponent ?? "")
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .truncationMode(.head)
+
+            Spacer(minLength: 0)
+
+            Button {
+                state.chooseFolder()
+            } label: {
+                Image(systemName: "folder.badge.plus")
+            }
+            .buttonStyle(.borderless)
+            .help("Open a different folder")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
     }
 
     /// Selecting a node loads its document through `AppState`.
