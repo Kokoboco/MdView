@@ -2,17 +2,33 @@ import SwiftUI
 import AppKit
 import MarkdownKit
 
+/// A single open document (one tab).
+struct OpenDocument: Identifiable, Equatable {
+    let url: URL
+    var text: String
+    var blocks: [Block]
+    var loadError: String?
+
+    var id: URL { url }
+    var name: String { url.lastPathComponent }
+
+    static func == (lhs: OpenDocument, rhs: OpenDocument) -> Bool {
+        lhs.url == rhs.url && lhs.text == rhs.text && lhs.loadError == rhs.loadError
+    }
+}
+
 /// Holds the app's observable state: the opened root folder, the document
-/// tree, the sidebar filter text and the currently selected document.
+/// tree, the sidebar filter text and the set of open document tabs.
 @MainActor
 final class AppState: ObservableObject {
     @Published var rootURL: URL?
     @Published var tree: [FileNode] = []
     @Published var filter: String = ""
-    @Published var selectedURL: URL?
-    @Published private(set) var documentText: String = ""
-    @Published private(set) var blocks: [Block] = []
-    @Published private(set) var loadError: String?
+
+    /// Open document tabs, in display order.
+    @Published private(set) var openDocuments: [OpenDocument] = []
+    /// The URL of the active (frontmost) tab.
+    @Published var activeURL: URL?
 
     private let lastFolderKey = "MdView.lastFolderPath"
 
@@ -23,6 +39,12 @@ final class AppState: ObservableObject {
     /// The tree after applying the current filter text.
     var filteredTree: [FileNode] {
         FileNode.filter(tree, query: filter)
+    }
+
+    /// The document shown in the main panel.
+    var activeDocument: OpenDocument? {
+        guard let activeURL else { return nil }
+        return openDocuments.first { $0.url == activeURL }
     }
 
     // MARK: Folder selection
@@ -44,26 +66,33 @@ final class AppState: ObservableObject {
         tree = FileNode.scan(directory: url)
         UserDefaults.standard.set(url.path, forKey: lastFolderKey)
 
-        // Keep the current selection if it still exists, else pick the first file.
-        if let selected = selectedURL, FileManager.default.fileExists(atPath: selected.path) {
-            load(url: selected)
-        } else if let first = firstFile(in: tree) {
+        // Keep tabs whose files still exist (e.g. when moving up a level).
+        openDocuments.removeAll { !FileManager.default.fileExists(atPath: $0.url.path) }
+        if let active = activeURL, !openDocuments.contains(where: { $0.url == active }) {
+            activeURL = openDocuments.first?.url
+        }
+        // Open the first document for a fresh folder with nothing already open.
+        if openDocuments.isEmpty, let first = firstFile(in: tree) {
             select(first)
-        } else {
-            clearSelection()
         }
     }
 
+    /// Re-scan the folder and reload the contents of all open tabs.
     func reload() {
         guard let root = rootURL else { return }
-        open(folder: root)
+        tree = FileNode.scan(directory: root)
+        openDocuments = openDocuments
+            .filter { FileManager.default.fileExists(atPath: $0.url.path) }
+            .map { loadDocument($0.url) }
+        if let active = activeURL, !openDocuments.contains(where: { $0.url == active }) {
+            activeURL = openDocuments.first?.url
+        }
     }
 
     /// Whether the current root has a parent directory we can move up into.
     var canGoUp: Bool {
         guard let root = rootURL else { return false }
-        let parent = root.deletingLastPathComponent()
-        return parent.path != root.path
+        return root.deletingLastPathComponent().path != root.path
     }
 
     /// Re-root the tree at the parent of the current folder.
@@ -81,30 +110,49 @@ final class AppState: ObservableObject {
         }
     }
 
-    // MARK: Selection / loading
+    // MARK: Tabs
 
+    /// Open `url` in a tab (or switch to it if already open) and make it active.
     func select(_ url: URL) {
-        selectedURL = url
-        load(url: url)
+        if !openDocuments.contains(where: { $0.url == url }) {
+            openDocuments.append(loadDocument(url))
+        }
+        activeURL = url
     }
 
-    private func clearSelection() {
-        selectedURL = nil
-        documentText = ""
-        blocks = []
-        loadError = nil
+    /// Close the tab for `url`, activating a neighbour if it was frontmost.
+    func close(_ url: URL) {
+        guard let index = openDocuments.firstIndex(where: { $0.url == url }) else { return }
+        openDocuments.remove(at: index)
+        if activeURL == url {
+            if openDocuments.isEmpty {
+                activeURL = nil
+            } else {
+                activeURL = openDocuments[min(index, openDocuments.count - 1)].url
+            }
+        }
     }
 
-    private func load(url: URL) {
+    func closeActive() {
+        if let activeURL { close(activeURL) }
+    }
+
+    func selectNextTab(_ offset: Int) {
+        guard !openDocuments.isEmpty else { return }
+        let current = activeURL.flatMap { url in openDocuments.firstIndex { $0.url == url } } ?? 0
+        let next = (current + offset + openDocuments.count) % openDocuments.count
+        activeURL = openDocuments[next].url
+    }
+
+    private func loadDocument(_ url: URL) -> OpenDocument {
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
-            documentText = text
-            blocks = MarkdownParser.parse(text)
-            loadError = nil
+            return OpenDocument(url: url, text: text, blocks: MarkdownParser.parse(text), loadError: nil)
         } catch {
-            documentText = ""
-            blocks = []
-            loadError = "Could not read \(url.lastPathComponent): \(error.localizedDescription)"
+            return OpenDocument(
+                url: url, text: "", blocks: [],
+                loadError: "Could not read \(url.lastPathComponent): \(error.localizedDescription)"
+            )
         }
     }
 
@@ -124,18 +172,16 @@ final class AppState: ObservableObject {
     /// Raw markdown — the best format to hand an agent: compact and
     /// structure-preserving with no rendering noise.
     func copyRawMarkdown() {
-        Clipboard.copy(documentText)
+        Clipboard.copy(activeDocument?.text ?? "")
     }
 
     /// Raw markdown prefixed with a small context header (file path) so an
     /// agent knows what the document is.
     func copyWithContext() {
-        guard let url = selectedURL else {
-            Clipboard.copy(documentText)
-            return
-        }
-        let path = rootURL.map { url.path.replacingOccurrences(of: $0.path + "/", with: "") } ?? url.lastPathComponent
+        guard let doc = activeDocument else { return }
+        let path = rootURL.map { doc.url.path.replacingOccurrences(of: $0.path + "/", with: "") }
+            ?? doc.url.lastPathComponent
         let header = "<!-- file: \(path) -->\n\n"
-        Clipboard.copy(header + documentText)
+        Clipboard.copy(header + doc.text)
     }
 }

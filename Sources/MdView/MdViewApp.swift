@@ -34,7 +34,27 @@ struct MdViewApp: App {
                     state.copyRawMarkdown()
                 }
                 .keyboardShortcut("c", modifiers: [.command, .shift])
-                .disabled(state.selectedURL == nil)
+                .disabled(state.activeDocument == nil)
+            }
+
+            CommandGroup(after: .windowList) {
+                Button("Close Tab") {
+                    state.closeActive()
+                }
+                .keyboardShortcut("w", modifiers: [.command])
+                .disabled(state.activeDocument == nil)
+
+                Button("Next Tab") {
+                    state.selectNextTab(1)
+                }
+                .keyboardShortcut("]", modifiers: [.command, .shift])
+                .disabled(state.openDocuments.count < 2)
+
+                Button("Previous Tab") {
+                    state.selectNextTab(-1)
+                }
+                .keyboardShortcut("[", modifiers: [.command, .shift])
+                .disabled(state.openDocuments.count < 2)
             }
         }
     }
